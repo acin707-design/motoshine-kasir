@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#071427">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Kasir - Motoshine Gaming Lounge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy-deep:#071427;
+    --navy:#0B1F3A;
+    --navy-panel:#102a4d;
+    --cyan:#0FA3B1;
+    --cyan-glow:#4FD8E5;
+    --amber:#FFB800;
+    --red:#FF4D4D;
+    --text:#F5F7FA;
+    --muted:#8B98AC;
+    --border:#1D3760;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--navy-deep);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    height:100vh;
+    overflow:hidden;
+  }
+  .mono{ font-family:'JetBrains Mono',monospace; }
+  .display{ font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:0.02em; }
+
+  /* ===== LOGIN ===== */
+  #loginScreen{
+    position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 0%, #10305c 0%, var(--navy-deep) 70%);
+  }
+  .login-badge{
+    width:88px; height:88px; border-radius:50%; border:3px solid var(--cyan);
+    display:flex; align-items:center; justify-content:center; margin-bottom:20px;
+    box-shadow:0 0 30px rgba(15,163,177,0.4);
+  }
+  .login-badge span{ font-size:28px; font-family:'Rajdhani',sans-serif; font-weight:700; color:var(--cyan); }
+  #loginScreen h1{ font-family:'Rajdhani',sans-serif; font-size:26px; letter-spacing:0.08em; margin-bottom:4px; }
+  #loginScreen .sub{ color:var(--muted); font-size:13px; margin-bottom:28px; letter-spacing:0.05em; text-transform:uppercase; }
+  #pinDisplay{
+    display:flex; gap:12px; margin-bottom:24px;
+  }
+  .pin-dot{ width:16px; height:16px; border-radius:50%; border:2px solid var(--cyan); background:transparent; transition:0.15s; }
+  .pin-dot.filled{ background:var(--cyan); box-shadow:0 0 10px var(--cyan-glow); }
+  #pinPad{ display:grid; grid-template-columns:repeat(3,64px); gap:12px; }
+  #pinPad button{
+    width:64px; height:64px; border-radius:50%; border:1px solid var(--border); background:var(--navy-panel);
+    color:var(--text); font-size:20px; font-family:'Rajdhani',sans-serif; font-weight:600; cursor:pointer;
+  }
+  #pinPad button:active{ background:var(--cyan); color:var(--navy-deep); }
+  #loginError{ color:var(--red); font-size:13px; margin-top:14px; min-height:18px; }
+
+  /* ===== APP SHELL ===== */
+  #app{ display:none; flex-direction:column; height:100vh; }
+  #topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; border-bottom:1px solid var(--border); background:var(--navy);
+  }
+  #topbar .brand{ display:flex; align-items:center; gap:10px; }
+  #topbar .brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan-glow); }
+  #topbar .brand h1{ font-family:'Rajdhani',sans-serif; font-size:19px; letter-spacing:0.06em; }
+  #topbar .brand .tag{ color:var(--muted); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; }
+  #tabs{ display:flex; gap:6px; }
+  #tabs button{
+    padding:9px 18px; border-radius:20px; border:1px solid var(--border); background:transparent;
+    color:var(--muted); font-family:'Rajdhani',sans-serif; font-weight:600; font-size:14px; letter-spacing:0.04em; cursor:pointer;
+  }
+  #tabs button.active{ background:var(--cyan); color:var(--navy-deep); border-color:var(--cyan); }
+  #userinfo{ display:flex; align-items:center; gap:12px; font-size:13px; color:var(--muted); }
+  #userinfo b{ color:var(--text); }
+  #logoutBtn{ background:transparent; border:1px solid var(--border); color:var(--muted); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; }
+
+  .view{ flex:1; overflow-y:auto; padding:20px 22px; display:none; }
+  .view.active{ display:block; }
+  .section-title{ font-family:'Rajdhani',sans-serif; font-size:14px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:14px; }
+
+  /* ===== DASHBOARD ===== */
+  #unitGrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+  .unit-card{
+    background:var(--navy-panel); border:1px solid var(--border); border-radius:14px; padding:16px;
+    display:flex; flex-direction:column; gap:10px; position:relative; overflow:hidden;
+  }
+  .unit-card.state-active{ border-color:var(--cyan); }
+  .unit-card .cat{ font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
+  .unit-card .name{ font-family:'Rajdhani',sans-serif; font-size:19px; font-weight:700; }
+  .status-pill{ display:inline-flex; align-items:center; gap:6px; font-size:11px; padding:3px 10px; border-radius:20px; width:fit-content; }
+  .status-pill.idle{ background:rgba(139,152,172,0.15); color:var(--muted); }
+  .status-pill.running{ background:rgba(15,163,177,0.18); color:var(--cyan-glow); }
+  .timer-display{ font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; letter-spacing:0.03em; }
+  .timer-display.warn{ color:var(--amber); }
+  .timer-display.danger{ color:var(--red); }
+  .timer-display.normal{ color:var(--cyan-glow); }
+  .timer-bar{ height:4px; border-radius:4px; background:rgba(255,255,255,0.08); overflow:hidden; }
+  .timer-bar-fill{ height:100%; background:var(--cyan); transition:width 1s linear, background 1s; }
+  .cost-line{ font-size:13px; color:var(--muted); }
+  .cost-line b{ color:var(--text); font-family:'JetBrains Mono',monospace; }
+  .unit-card button{
+    margin-top:4px; padding:10px; border-radius:8px; border:none; font-family:'Rajdhani',sans-serif;
+    font-weight:700; font-size:14px; letter-spacing:0.03em; cursor:pointer;
+  }
+  .btn-start{ background:var(--cyan); color:var(--navy-deep); }
+  .btn-stop{ background:transparent; border:1px solid var(--red) !important; color:var(--red); }
+
+  /* ===== POS ===== */
+  #posLayout{ display:flex; gap:16px; height:100%; }
+  #posLeft{ flex:1; display:flex; flex-direction:column; min-width:0; }
+  #posRight{ width:340px; flex-shrink:0; background:var(--navy-panel); border-radius:14px; padding:16px; display:flex; flex-direction:column; }
+  .session-banner{
+    background:var(--navy-panel); border:1px solid var(--cyan); border-radius:10px; padding:12px 16px;
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;
+  }
+  .search-row{ display:flex; gap:10px; margin-bottom:12px; }
+  .search-row input{ flex:1; }
+  input, select{
+    background:var(--navy); border:1px solid var(--border); color:var(--text);
+    padding:10px 12px; border-radius:8px; font-size:14px; font-family:'Inter',sans-serif;
+  }
+  .cat-tabs{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .cat-tabs button{
+    padding:7px 14px; border-radius:20px; border:1px solid var(--border); background:transparent;
+    color:var(--muted); font-size:13px; cursor:pointer; font-weight:600;
+  }
+  .cat-tabs button.active{ background:var(--cyan); color:var(--navy-deep); border-color:var(--cyan); }
+  #productGrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; overflow-y:auto; padding-bottom:10px; }
+  .product-card{
+    background:var(--navy-panel); border:1px solid var(--border); border-radius:10px; padding:12px; cursor:pointer;
+  }
+  .product-card:active{ border-color:var(--cyan); }
+  .product-card .pname{ font-size:13px; font-weight:600; margin-bottom:6px; }
+  .product-card .pprice{ font-family:'JetBrains Mono',monospace; color:var(--cyan-glow); font-size:13px; }
+
+  #cartList{ flex:1; overflow-y:auto; margin-bottom:10px; }
+  .cart-row{ display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .qty-ctrl{ display:flex; align-items:center; gap:6px; }
+  .qty-ctrl button{ width:22px; height:22px; border-radius:5px; border:1px solid var(--border); background:var(--navy); color:var(--text); cursor:pointer; font-size:13px; }
+  .totals-box{ border-top:1px solid var(--border); padding-top:10px; }
+  .total-line{ display:flex; justify-content:space-between; font-size:13px; padding:4px 0; color:var(--muted); }
+  .total-line.grand{ font-size:18px; color:var(--text); font-family:'Rajdhani',sans-serif; font-weight:700; padding-top:8px; border-top:1px solid var(--border); margin-top:6px; }
+  .grand .mono{ color:var(--cyan-glow); }
+  #payBtn{ margin-top:12px; padding:14px; background:var(--cyan); color:var(--navy-deep); border:none; border-radius:10px; font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16px; letter-spacing:0.04em; cursor:pointer; }
+  #payBtn:disabled{ opacity:0.4; }
+  .field-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin:8px 0 4px; }
+
+  /* ===== REPORT ===== */
+  .report-cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:20px; }
+  .report-card{ background:var(--navy-panel); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  .report-card .label{ font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:8px; }
+  .report-card .value{ font-family:'Rajdhani',sans-serif; font-size:26px; font-weight:700; color:var(--cyan-glow); }
+  table.report-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  table.report-table th{ text-align:left; padding:10px; color:var(--muted); border-bottom:1px solid var(--border); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; }
+  table.report-table td{ padding:10px; border-bottom:1px solid var(--border); }
+
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:4px; }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen">
+  <div class="login-badge"><span>MS</span></div>
+  <h1>MOTOSHINE GAMING LOUNGE</h1>
+  <div class="sub">Sistem Kasir</div>
+  <div id="pinDisplay">
+    <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+  </div>
+  <div id="pinPad">
+    <button onclick="pinPress(1)">1</button><button onclick="pinPress(2)">2</button><button onclick="pinPress(3)">3</button>
+    <button onclick="pinPress(4)">4</button><button onclick="pinPress(5)">5</button><button onclick="pinPress(6)">6</button>
+    <button onclick="pinPress(7)">7</button><button onclick="pinPress(8)">8</button><button onclick="pinPress(9)">9</button>
+    <button onclick="pinClear()">C</button><button onclick="pinPress(0)">0</button><button onclick="pinBackspace()">⌫</button>
+  </div>
+  <div id="loginError"></div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div id="topbar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <h1>MOTOSHINE</h1>
+        <div class="tag">Gaming Lounge · Kasir</div>
+      </div>
+    </div>
+    <div id="tabs">
+      <button class="active" onclick="switchTab('dashboard')">Dashboard</button>
+      <button onclick="switchTab('pos')">Kasir F&amp;B</button>
+      <button onclick="switchTab('report')">Laporan</button>
+    </div>
+    <div id="userinfo">
+      <span>Kasir: <b id="staffNameLabel">-</b></span>
+      <button id="logoutBtn" onclick="logout()">Keluar</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="view-dashboard" class="view active">
+    <div class="section-title">Status Unit Live</div>
+    <div id="unitGrid"></div>
+  </div>
+
+  <!-- POS -->
+  <div id="view-pos" class="view">
+    <div id="sessionBannerWrap"></div>
+    <div id="posLayout">
+      <div id="posLeft">
+        <div class="search-row">
+          <input id="searchInput" placeholder="Cari menu..." oninput="renderProducts()">
+        </div>
+        <div class="cat-tabs" id="catTabs"></div>
+        <div id="productGrid"></div>
+      </div>
+      <div id="posRight">
+        <div class="section-title">Keranjang</div>
+        <div id="cartList"></div>
+        <div class="totals-box">
+          <div class="total-line"><span>Sewa</span><span class="mono" id="tRental">Rp 0</span></div>
+          <div class="total-line"><span>F&amp;B</span><span class="mono" id="tFnb">Rp 0</span></div>
+          <div class="field-label">Diskon (Rp)</div>
+          <input id="discountInput" type="number" value="0" min="0" oninput="updateTotals()">
+          <div class="total-line grand"><span>TOTAL</span><span class="mono" id="tGrand">Rp 0</span></div>
+          <div class="field-label">Metode Bayar</div>
+          <select id="paymentMethod" onchange="toggleCashInput()">
+            <option value="cash">Cash</option>
+            <option value="qris">QRIS</option>
+            <option value="transfer">Transfer</option>
+          </select>
+          <div id="cashInputWrap">
+            <div class="field-label">Uang Diterima</div>
+            <input id="cashReceived" type="number" placeholder="0" oninput="updateTotals()">
+            <div class="total-line"><span>Kembalian</span><span class="mono" id="tChange">Rp 0</span></div>
+          </div>
+          <button id="payBtn" onclick="checkout()">BAYAR &amp; CETAK STRUK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPORT -->
+  <div id="view-report" class="view">
+    <div class="section-title">Ringkasan Hari Ini</div>
+    <div class="report-cards">
+      <div class="report-card"><div class="label">Total Omzet</div><div class="value mono" id="repTotal">Rp 0</div></div>
+      <div class="report-card"><div class="label">Jumlah Transaksi</div><div class="value mono" id="repCount">0</div></div>
+      <div class="report-card"><div class="label">Omzet Sewa</div><div class="value mono" id="repRental">Rp 0</div></div>
+      <div class="report-card"><div class="label">Omzet F&amp;B</div><div class="value mono" id="repFnb">Rp 0</div></div>
+    </div>
+    <div class="section-title">Transaksi Hari Ini</div>
+    <table class="report-table">
+      <thead><tr><th>Waktu</th><th>Kasir</th><th>Sewa</th><th>F&amp;B</th><th>Diskon</th><th>Total</th><th>Bayar</th></tr></thead>
+      <tbody id="repTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ====== GANTI DENGAN PUNYA LO ======
+const SUPABASE_URL = "https://xxxxxxxxxx.supabase.co";
+const SUPABASE_ANON_KEY = "isi-anon-key-lo-disini";
+// ===================================
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentStaff = null;
+let units = [];
+let products = [];
+let activeSessionsMap = {}; // unit_id -> session row
+let cart = [];
+let currentSession = null; // sesi yang sedang di-checkout di POS (null = transaksi F&B lepas)
+let currentCategory = 'all';
+
+/* ================= LOGIN ================= */
+let pinBuffer = '';
+function pinPress(n){
+  if(pinBuffer.length>=4) return;
+  pinBuffer += n;
+  renderPinDots();
+  if(pinBuffer.length===4) doLogin();
+}
+function pinClear(){ pinBuffer=''; renderPinDots(); document.getElementById('loginError').textContent=''; }
+function pinBackspace(){ pinBuffer = pinBuffer.slice(0,-1); renderPinDots(); }
+function renderPinDots(){
+  document.querySelectorAll('.pin-dot').forEach((d,i)=> d.classList.toggle('filled', i < pinBuffer.length));
+}
+async function doLogin(){
+  const { data, error } = await supabase.from('staff').select('*').eq('pin_code', pinBuffer).eq('is_active', true).maybeSingle();
+  if(error || !data){
+    document.getElementById('loginError').textContent = 'PIN salah, coba lagi.';
+    pinClear();
+    return;
+  }
+  currentStaff = data;
+  sessionStorage.setItem('staff', JSON.stringify(data));
+  enterApp();
+}
+function enterApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('staffNameLabel').textContent = currentStaff.name;
+  loadAll();
+}
+function logout(){
+  sessionStorage.removeItem('staff');
+  currentStaff = null;
+  pinClear();
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+}
+
+/* ================= TABS ================= */
+function switchTab(tab){
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+tab).classList.add('active');
+  [...document.querySelectorAll('#tabs button')].find(b=>b.textContent.toLowerCase().includes(tab==='pos'?'kasir':tab)).classList.add('active');
+  if(tab==='report') loadReport();
+  if(tab==='pos' && !currentSession) renderSessionBanner();
+}
+
+/* ================= LOAD DATA ================= */
+async function loadAll(){
+  await loadUnits();
+  await loadProducts();
+  await refreshActiveSessions();
+  renderCatTabs();
+  renderProducts();
+  setInterval(refreshActiveSessions, 5000); // sinkron ulang tiap 5 detik
+  setInterval(tickTimers, 1000); // update tampilan timer tiap detik
+}
+
+async function loadUnits(){
+  const { data, error } = await supabase.from('units').select('*').eq('is_active', true).order('sort_order');
+  if(error){ console.error(error); return; }
+  units = data;
+}
+
+async function loadProducts(){
+  const { data, error } = await supabase.from('products').select('*').eq('is_active', true);
+  if(error){ console.error(error); return; }
+  products = data;
+}
+
+async function refreshActiveSessions(){
+  const { data, error } = await supabase.from('sessions').select('*').eq('status','active');
+  if(error){ console.error(error); return; }
+  activeSessionsMap = {};
+  data.forEach(s => activeSessionsMap[s.unit_id] = s);
+  renderUnitGrid();
+}
+
+/* ================= DASHBOARD ================= */
+function renderUnitGrid(){
+  const grid = document.getElementById('unitGrid');
+  grid.innerHTML = '';
+  units.forEach(u => {
+    const session = activeSessionsMap[u.id];
+    const card = document.createElement('div');
+    card.className = 'unit-card' + (session ? ' state-active' : '');
+    card.id = 'unit-'+u.id;
+    if(session){
+      card.innerHTML = `
+        <div class="cat">${u.category.toUpperCase()}</div>
+        <div class="name">${u.name}</div>
+        <div class="status-pill running">● SEDANG DIPAKAI</div>
+        <div class="timer-display normal" id="timer-${u.id}">00:00:00</div>
+        <div class="timer-bar"><div class="timer-bar-fill" id="bar-${u.id}" style="width:0%"></div></div>
+        <div class="cost-line">Estimasi biaya: <b class="mono" id="cost-${u.id}">Rp 0</b></div>
+        <button class="btn-stop" onclick="endSession(${u.id})">SELESAI &amp; CHECKOUT</button>
+      `;
+    } else {
+      card.innerHTML = `
+        <div class="cat">${u.category.toUpperCase()}</div>
+        <div class="name">${u.name}</div>
+        <div class="status-pill idle">○ TERSEDIA</div>
+        <div class="cost-line">Tarif: <b class="mono">Rp ${u.hourly_rate.toLocaleString('id-ID')}/jam</b></div>
+        <button class="btn-start" onclick="startSession(${u.id})">MULAI SESI</button>
+      `;
+    }
+    grid.appendChild(card);
+  });
+  tickTimers();
+}
+
+function tickTimers(){
+  units.forEach(u => {
+    const session = activeSessionsMap[u.id];
+    if(!session) return;
+    const start = new Date(session.start_time);
+    const now = new Date();
+    const seconds = Math.floor((now - start)/1000);
+    const hh = String(Math.floor(seconds/3600)).padStart(2,'0');
+    const mm = String(Math.floor((seconds%3600)/60)).padStart(2,'0');
+    const ss = String(seconds%60).padStart(2,'0');
+    const timerEl = document.getElementById('timer-'+u.id);
+    const barEl = document.getElementById('bar-'+u.id);
+    const costEl = document.getElementById('cost-'+u.id);
+    if(!timerEl) return;
+    timerEl.textContent = `${hh}:${mm}:${ss}`;
+    const hours = seconds/3600;
+    const cost = Math.round(hours * u.hourly_rate);
+    costEl.textContent = 'Rp ' + cost.toLocaleString('id-ID');
+
+    // Warna berubah tiap kelipatan 1 jam (progress ke jam berikutnya), makin lama makin "panas"
+    const cycle = hours % 1;
+    barEl.style.width = (cycle*100).toFixed(0)+'%';
+    timerEl.classList.remove('normal','warn','danger');
+    barEl.style.background = 'var(--cyan)';
+    if(hours >= 3){ timerEl.classList.add('danger'); barEl.style.background='var(--red)'; }
+    else if(hours >= 1.5){ timerEl.classList.add('warn'); barEl.style.background='var(--amber)'; }
+    else { timerEl.classList.add('normal'); }
+  });
+}
+
+async function startSession(unitId){
+  const { error } = await supabase.from('sessions').insert({ unit_id: unitId, start_time: new Date().toISOString(), status:'active' });
+  if(error){ alert('Gagal mulai sesi: '+error.message); return; }
+  refreshActiveSessions();
+}
+
+function endSession(unitId){
+  const session = activeSessionsMap[unitId];
+  const unit = units.find(u=>u.id===unitId);
+  if(!session) return;
+  currentSession = { ...session, unit };
+  cart = [];
+  document.getElementById('discountInput').value = 0;
+  document.getElementById('cashReceived').value = '';
+  switchTab('pos');
+  renderSessionBanner();
+  renderCart();
+}
+
+/* ================= POS ================= */
+function renderSessionBanner(){
+  const wrap = document.getElementById('sessionBannerWrap');
+  if(currentSession){
+    const start = new Date(currentSession.start_time);
+    const hours = (new Date()-start)/3600000;
+    wrap.innerHTML = `<div class="session-banner">
+      <div><b>${currentSession.unit.name}</b> · durasi ${hours.toFixed(2)} jam · tarif Rp ${currentSession.unit.hourly_rate.toLocaleString('id-ID')}/jam</div>
+      <button onclick="cancelSessionCheckout()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:6px;cursor:pointer;">Batal</button>
+    </div>`;
+  } else {
+    wrap.innerHTML = `<div class="session-banner"><div>Transaksi F&amp;B tanpa sewa unit</div></div>`;
+  }
+  updateTotals();
+}
+function cancelSessionCheckout(){ currentSession=null; cart=[]; renderSessionBanner(); renderCart(); }
+
+function renderCatTabs(){
+  const cats = ['all', ...new Set(products.map(p=>p.category))];
+  const wrap = document.getElementById('catTabs');
+  wrap.innerHTML = '';
+  cats.forEach(c=>{
+    const btn = document.createElement('button');
+    btn.textContent = c==='all' ? 'Semua' : c.charAt(0).toUpperCase()+c.slice(1);
+    btn.className = c===currentCategory ? 'active':'';
+    btn.onclick = ()=>{ currentCategory=c; renderCatTabs(); renderProducts(); };
+    wrap.appendChild(btn);
+  });
+}
+
+function renderProducts(){
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const grid = document.getElementById('productGrid');
+  grid.innerHTML = '';
+  products
+    .filter(p => currentCategory==='all' || p.category===currentCategory)
+    .filter(p => p.name.toLowerCase().includes(q))
+    .forEach(p=>{
+      const card = document.createElement('div');
+      card.className='product-card';
+      card.innerHTML = `<div class="pname">${p.name}</div><div class="pprice mono">Rp ${p.price.toLocaleString('id-ID')}</div>`;
+      card.onclick = ()=>addToCart(p);
+      grid.appendChild(card);
+    });
+}
+
+function addToCart(product){
+  const existing = cart.find(i=>i.product_id===product.id);
+  if(existing){ existing.qty+=1; existing.subtotal = existing.qty*existing.price; }
+  else cart.push({ product_id: product.id, item_name: product.name, qty:1, price: product.price, subtotal: product.price });
+  renderCart();
+}
+function changeQty(idx, delta){
+  cart[idx].qty += delta;
+  if(cart[idx].qty<=0){ cart.splice(idx,1); }
+  else cart[idx].subtotal = cart[idx].qty*cart[idx].price;
+  renderCart();
+}
+function renderCart(){
+  const list = document.getElementById('cartList');
+  list.innerHTML='';
+  if(cart.length===0) list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:10px 0;">Belum ada item F&B.</div>';
+  cart.forEach((item,idx)=>{
+    const row = document.createElement('div');
+    row.className='cart-row';
+    row.innerHTML = `
+      <span>${item.item_name}</span>
+      <div class="qty-ctrl">
+        <button onclick="changeQty(${idx},-1)">-</button>
+        <span>${item.qty}</span>
+        <button onclick="changeQty(${idx},1)">+</button>
+        <span class="mono" style="margin-left:8px;">Rp ${item.subtotal.toLocaleString('id-ID')}</span>
+      </div>`;
+    list.appendChild(row);
+  });
+  updateTotals();
+}
+
+function calcRentalAmount(){
+  if(!currentSession) return 0;
+  const start = new Date(currentSession.start_time);
+  const hours = Math.max((new Date()-start)/3600000, 0.25);
+  return Math.round(hours * currentSession.unit.hourly_rate);
+}
+
+function toggleCashInput(){
+  document.getElementById('cashInputWrap').style.display = document.getElementById('paymentMethod').value==='cash' ? 'block':'none';
+  updateTotals();
+}
+
+function updateTotals(){
+  const rental = calcRentalAmount();
+  const fnb = cart.reduce((s,i)=>s+i.subtotal,0);
+  const discount = Number(document.getElementById('discountInput').value)||0;
+  const grand = Math.max(rental+fnb-discount, 0);
+  document.getElementById('tRental').textContent = 'Rp '+rental.toLocaleString('id-ID');
+  document.getElementById('tFnb').textContent = 'Rp '+fnb.toLocaleString('id-ID');
+  document.getElementById('tGrand').textContent = 'Rp '+grand.toLocaleString('id-ID');
+  const cash = Number(document.getElementById('cashReceived').value)||0;
+  document.getElementById('tChange').textContent = 'Rp '+Math.max(cash-grand,0).toLocaleString('id-ID');
+  document.getElementById('payBtn').disabled = grand===0;
+  return { rental, fnb, discount, grand };
+}
+
+async function checkout(){
+  const { rental, fnb, discount, grand } = updateTotals();
+  const paymentMethod = document.getElementById('paymentMethod').value;
+  const cash = Number(document.getElementById('cashReceived').value)||0;
+
+  const { data: trx, error } = await supabase.from('transactions').insert({
+    session_id: currentSession ? currentSession.id : null,
+    cashier_name: currentStaff.name,
+    payment_method: paymentMethod,
+    rental_amount: rental,
+    fnb_amount: fnb,
+    discount_amount: discount,
+    total_amount: grand,
+    cash_received: paymentMethod==='cash' ? cash : null,
+    change_amount: paymentMethod==='cash' ? Math.max(cash-grand,0) : null
+  }).select().single();
+
+  if(error){ alert('Gagal simpan transaksi: '+error.message); return; }
+
+  if(cart.length>0){
+    await supabase.from('transaction_items').insert(cart.map(i=>({...i, transaction_id: trx.id})));
+  }
+  if(currentSession){
+    await supabase.from('sessions').update({ end_time: new Date().toISOString(), status:'completed' }).eq('id', currentSession.id);
+  }
+
+  printStruk(trx, cart, rental, fnb, discount, grand, cash);
+
+  currentSession=null; cart=[];
+  document.getElementById('discountInput').value=0;
+  document.getElementById('cashReceived').value='';
+  renderSessionBanner();
+  renderCart();
+  refreshActiveSessions();
+  switchTab('dashboard');
+}
+
+function printStruk(trx, items, rental, fnb, discount, total, cash){
+  const win = window.open('', '', 'width=320,height=600');
+  let html = `<div style="font-family:monospace;width:280px;">
+    <h3 style="text-align:center;">MOTOSHINE GAMING LOUNGE</h3>
+    <p style="text-align:center;">${new Date().toLocaleString('id-ID')}</p><hr>`;
+  if(rental>0) html += `<p>Sewa unit: Rp ${rental.toLocaleString('id-ID')}</p>`;
+  items.forEach(i=> html += `<p>${i.qty}x ${i.item_name} - Rp ${i.subtotal.toLocaleString('id-ID')}</p>`);
+  if(discount>0) html += `<p>Diskon: -Rp ${discount.toLocaleString('id-ID')}</p>`;
+  html += `<hr><b>TOTAL: Rp ${total.toLocaleString('id-ID')}</b>`;
+  if(cash) html += `<p>Tunai: Rp ${cash.toLocaleString('id-ID')} | Kembali: Rp ${Math.max(cash-total,0).toLocaleString('id-ID')}</p>`;
+  html += `<p style="text-align:center;">Kasir: ${trx.cashier_name}</p><p style="text-align:center;">Terima kasih!</p></div>`;
+  win.document.write(html);
+  win.print();
+}
+
+/* ================= REPORT ================= */
+async function loadReport(){
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const { data, error } = await supabase.from('transactions').select('*').gte('created_at', todayStart.toISOString()).order('created_at',{ascending:false});
+  if(error){ console.error(error); return; }
+
+  const total = data.reduce((s,t)=>s+Number(t.total_amount),0);
+  const rental = data.reduce((s,t)=>s+Number(t.rental_amount||0),0);
+  const fnb = data.reduce((s,t)=>s+Number(t.fnb_amount||0),0);
+
+  document.getElementById('repTotal').textContent = 'Rp '+total.toLocaleString('id-ID');
+  document.getElementById('repCount').textContent = data.length;
+  document.getElementById('repRental').textContent = 'Rp '+rental.toLocaleString('id-ID');
+  document.getElementById('repFnb').textContent = 'Rp '+fnb.toLocaleString('id-ID');
+
+  const tbody = document.getElementById('repTableBody');
+  tbody.innerHTML = data.map(t=>`
+    <tr>
+      <td>${new Date(t.created_at).toLocaleTimeString('id-ID')}</td>
+      <td>${t.cashier_name||'-'}</td>
+      <td>Rp ${Number(t.rental_amount||0).toLocaleString('id-ID')}</td>
+      <td>Rp ${Number(t.fnb_amount||0).toLocaleString('id-ID')}</td>
+      <td>Rp ${Number(t.discount_amount||0).toLocaleString('id-ID')}</td>
+      <td>Rp ${Number(t.total_amount).toLocaleString('id-ID')}</td>
+      <td>${t.payment_method}</td>
+    </tr>`).join('');
+}
+
+/* ================= INIT ================= */
+(function init(){
+  const saved = sessionStorage.getItem('staff');
+  if(saved){ currentStaff = JSON.parse(saved); enterApp(); }
+})();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js').catch(err=>console.error(err));
+}
+</script>
+</body>
+</html>
